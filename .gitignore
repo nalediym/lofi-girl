@@ -12,3 +12,4 @@ demo.tape
 
 # Claude Code
 .claude/
+.gstack/

@@ -31,6 +31,30 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tempfile::NamedTempFile;
 
 // ---------------------------------------------------------------------------
+// CLI output styling (from DESIGN.md)
+// ---------------------------------------------------------------------------
+
+/// ANSI color codes matching the gifterm design system.
+pub mod style {
+    pub const DIM: &str = "\x1b[2m";
+    pub const RESET: &str = "\x1b[0m";
+    pub const AMBER: &str = "\x1b[38;2;232;168;73m";
+    pub const TEAL: &str = "\x1b[38;2;91;184;176m";
+    pub const GREEN: &str = "\x1b[38;2;126;200;139m";
+    pub const RED: &str = "\x1b[38;2;212;87;78m";
+
+    /// Print a styled gifterm status line: `gifterm <action> <detail>`
+    pub fn status(action_color: &str, action: &str, detail: &str) {
+        eprintln!("{DIM}gifterm{RESET} {action_color}{action}{RESET} {detail}");
+    }
+
+    /// Print a dim hint line (indented under errors).
+    pub fn hint(msg: &str) {
+        eprintln!("{DIM}gifterm         {msg}{RESET}");
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Error type
 // ---------------------------------------------------------------------------
 
@@ -222,7 +246,7 @@ pub fn decode_and_cache(
     max_width: Option<u32>,
     cache_path: &Path,
 ) -> Result<(Meta, Vec<Vec<u8>>), Error> {
-    eprintln!("Decoding {}...", gif_path.display());
+    style::status(style::TEAL, "decoding", &format!("{}", gif_path.display()));
 
     let file = BufReader::new(fs::File::open(gif_path)?);
     let decoder = GifDecoder::new(file)?;
@@ -235,6 +259,7 @@ pub fn decode_and_cache(
     let first = raw_frames[0].buffer();
     let (orig_w, orig_h) = (first.width(), first.height());
 
+    let needs_scale = max_width.map_or(false, |mw| orig_w > mw);
     let (out_w, out_h) = if let Some(mw) = max_width {
         if orig_w > mw {
             let scale = mw as f64 / orig_w as f64;
@@ -245,6 +270,14 @@ pub fn decode_and_cache(
     } else {
         (orig_w, orig_h)
     };
+
+    if needs_scale {
+        style::status(
+            style::TEAL,
+            "scaling ",
+            &format!("{orig_w}x{orig_h} -> {out_w}x{out_h} (lanczos3)"),
+        );
+    }
 
     let mut frames = Vec::with_capacity(raw_frames.len());
     let mut durations = Vec::with_capacity(raw_frames.len());
@@ -263,7 +296,14 @@ pub fn decode_and_cache(
         frames.push(rgba.into_raw());
 
         if (i + 1) % 20 == 0 || i == raw_frames.len() - 1 {
-            eprint!("\r  Decoded {}/{}", i + 1, raw_frames.len());
+            eprint!(
+                "\r{DIM}gifterm{RESET} {TEAL}decoded {RESET} {}/{} frames",
+                i + 1,
+                raw_frames.len(),
+                DIM = style::DIM,
+                RESET = style::RESET,
+                TEAL = style::TEAL,
+            );
         }
     }
     eprintln!();
@@ -289,11 +329,10 @@ pub fn decode_and_cache(
     }
 
     let cache_kb: usize = frames.iter().map(|f: &Vec<u8>| f.len()).sum::<usize>() / 1024;
-    eprintln!(
-        "  Cached {} frames ({} KB) -> {}",
-        frames.len(),
-        cache_kb,
-        cache_path.display()
+    style::status(
+        style::GREEN,
+        "cached ",
+        &format!("{} frames ({} KB) -> {}", frames.len(), cache_kb, cache_path.display()),
     );
 
     Ok((meta, frames))
@@ -305,9 +344,10 @@ pub fn load_frames(gif_path: &Path, max_width: Option<u32>) -> Result<(Meta, Vec
     let cp = cache_dir().join(&key);
 
     if let Some(result) = load_from_cache(&cp) {
-        eprintln!(
-            "Cache hit ({}): {} frames, {}x{}",
-            key, result.0.n_frames, result.0.width, result.0.height
+        style::status(
+            style::AMBER,
+            "cache hit",
+            &format!("{} frames, {}x{}", result.0.n_frames, result.0.width, result.0.height),
         );
         return Ok(result);
     }
@@ -330,8 +370,7 @@ pub fn play(meta: &Meta, frames: &[Vec<u8>]) -> io::Result<()> {
     let w = meta.width;
     let h = meta.height;
 
-    eprintln!("  {} frames, {}x{}", meta.n_frames, w, h);
-    eprint!("  Sending frames...");
+    style::status(style::TEAL, "sending ", &format!("{} frames, {}x{}", meta.n_frames, w, h));
 
     // Frame 1: transmit + display
     send_via_file(
@@ -348,7 +387,14 @@ pub fn play(meta: &Meta, frames: &[Vec<u8>]) -> io::Result<()> {
             frame_data,
         )?;
         if (i + 1) % 10 == 0 || i == frames.len() - 2 {
-            eprint!("\r  Sending frames... {}/{}", i + 2, frames.len());
+            eprint!(
+                "\r{DIM}gifterm{RESET} {TEAL}sending {RESET} {}/{} frames",
+                i + 2,
+                frames.len(),
+                DIM = style::DIM,
+                RESET = style::RESET,
+                TEAL = style::TEAL,
+            );
         }
     }
     eprintln!();
@@ -361,7 +407,7 @@ pub fn play(meta: &Meta, frames: &[Vec<u8>]) -> io::Result<()> {
     out.write_all(&gr_cmd(&format!("a=a,i={id},s=3,v=1,q=2"), None))?;
     out.flush()?;
 
-    eprintln!("  Playing! Animation lives in kitty until you clear the screen.");
+    style::status(style::GREEN, "playing", &format!("{} frames, loop=infinite, id={id}", meta.n_frames));
     Ok(())
 }
 

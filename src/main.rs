@@ -3,7 +3,7 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::Command;
 
-use gifterm::{check_kitty_support, find_kitty};
+use gifterm::{check_kitty_support, find_kitty, style};
 
 // -- CLI --
 
@@ -39,11 +39,12 @@ fn prompt_yn(msg: &str) -> bool {
 
 /// Offer to install kitty and re-launch inside it
 fn offer_kitty_install(args: &[String]) {
-    eprintln!("gifterm requires a terminal with kitty graphics protocol support.");
-    eprintln!("Supported terminals: kitty, WezTerm, Konsole (partial)\n");
+    style::status(style::RED, "error  ", "not a kitty-protocol terminal");
+    style::hint("supported: kitty, WezTerm, Konsole (partial)");
+    eprintln!();
 
     if let Some(kitty_path) = find_kitty() {
-        eprintln!("kitty is installed at {}", kitty_path.display());
+        style::status(style::TEAL, "found  ", &format!("kitty at {}", kitty_path.display()));
         if prompt_yn("Launch gifterm inside kitty?") {
             let gifterm = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("gifterm"));
             let status = Command::new(&kitty_path)
@@ -54,7 +55,7 @@ fn offer_kitty_install(args: &[String]) {
             match status {
                 Ok(s) => std::process::exit(s.code().unwrap_or(0)),
                 Err(e) => {
-                    eprintln!("Failed to launch kitty: {e}");
+                    style::status(style::RED, "error  ", &format!("failed to launch kitty: {e}"));
                     std::process::exit(1);
                 }
             }
@@ -68,13 +69,13 @@ fn offer_kitty_install(args: &[String]) {
     if is_mac {
         eprintln!("Install kitty with Homebrew?");
         if prompt_yn("  brew install --cask kitty") {
-            eprintln!("\nInstalling kitty...\n");
+            style::status(style::TEAL, "install", "kitty via homebrew");
             let status = Command::new("brew")
                 .args(["install", "--cask", "kitty"])
                 .status();
             match status {
                 Ok(s) if s.success() => {
-                    eprintln!("\nkitty installed successfully!");
+                    style::status(style::GREEN, "installed", "kitty");
                     if let Some(kitty_path) = find_kitty() {
                         if prompt_yn("Launch gifterm inside kitty now?") {
                             let gifterm = std::env::current_exe()
@@ -87,17 +88,17 @@ fn offer_kitty_install(args: &[String]) {
                         }
                     }
                 }
-                _ => eprintln!(
-                    "Installation failed. Install manually: https://sw.kovidgoyal.net/kitty/"
-                ),
+                _ => {
+                    style::status(style::RED, "error  ", "installation failed");
+                    style::hint("install manually: https://sw.kovidgoyal.net/kitty/");
+                }
             }
         }
     } else if is_linux {
-        eprintln!("Install kitty with:");
-        eprintln!("  curl -L https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin");
-        eprintln!("\nOr use your package manager (apt install kitty, dnf install kitty, etc.)");
+        style::hint("install kitty: curl -L https://sw.kovidgoyal.net/kitty/installer.sh | sh /dev/stdin");
+        style::hint("or use your package manager (apt install kitty, dnf install kitty, etc.)");
     } else {
-        eprintln!("Download kitty from: https://sw.kovidgoyal.net/kitty/");
+        style::hint("download kitty: https://sw.kovidgoyal.net/kitty/");
     }
 
     std::process::exit(1);
@@ -115,25 +116,25 @@ fn main() {
     }
 
     if !cli.gif.exists() {
-        eprintln!("Not found: {}", cli.gif.display());
+        style::status(style::RED, "error  ", &format!("file not found: {}", cli.gif.display()));
         std::process::exit(1);
     }
 
     let (meta, frames) = match gifterm::load_frames(&cli.gif, cli.width) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("Error: {e}");
+            style::status(style::RED, "error  ", &format!("{e}"));
             std::process::exit(1);
         }
     };
 
     if cli.cache_only {
-        eprintln!("Cached. Not playing (--cache-only).");
+        style::status(style::GREEN, "cached ", "not playing (--cache-only)");
         return;
     }
 
     if let Err(e) = gifterm::play(&meta, &frames) {
-        eprintln!("Playback error: {e}");
+        style::status(style::RED, "error  ", &format!("playback failed: {e}"));
         std::process::exit(1);
     }
 }
