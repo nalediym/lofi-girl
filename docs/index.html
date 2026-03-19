@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>gifterm — Play GIFs in your terminal</title>
+<meta name="description" content="Play animated GIFs natively in your terminal. Fire-and-forget animations that persist on the GPU. No browser. No electron. Just frames.">
+<meta property="og:title" content="gifterm — Play GIFs in your terminal">
+<meta property="og:description" content="Play animated GIFs natively in kitty-protocol terminals. Lofi vibes, pixel art, and ambient animation for your workspace.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://nalediym.github.io/gifterm">
+<link rel="preconnect" href="https://api.fontshare.com">
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #E8A849;
+    --primary-dim: #E8A84922;
+    --primary-glow: #E8A84933;
+    --primary-hover: #F0B85A;
+    --secondary: #5BB8B0;
+    --success: #7EC88B;
+    --error: #D4574E;
+
+    --n950: #1A1816;
+    --n900: #211F1C;
+    --n850: #2A2724;
+    --n800: #343130;
+    --n700: #4A4643;
+    --n600: #6A6560;
+    --n500: #8A8580;
+    --n400: #A8A39C;
+    --n300: #C4BFB8;
+    --n50: #F0EBE3;
+
+    --font-display: 'Satoshi', system-ui, sans-serif;
+    --font-body: 'DM Sans', system-ui, sans-serif;
+    --font-code: 'JetBrains Mono', monospace;
+
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: var(--font-body);
+    background: var(--n950);
+    color: var(--n50);
+    line-height: 1.6;
+  }
+
+  /* Grain */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  .container {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  a { color: var(--primary); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ---- Nav ---- */
+  nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    padding: 16px 0;
+    background: rgba(26, 24, 22, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--n800);
+  }
+  nav .container {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .nav-logo {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 1.25rem;
+    color: var(--n50);
+    text-decoration: none;
+  }
+  .nav-logo span { color: var(--primary); }
+  .nav-links {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    list-style: none;
+  }
+  .nav-links a {
+    color: var(--n400);
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: color 0.15s;
+  }
+  .nav-links a:hover { color: var(--n50); text-decoration: none; }
+  .nav-cta {
+    background: var(--primary);
+    color: var(--n950) !important;
+    padding: 6px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    transition: background 0.15s;
+  }
+  .nav-cta:hover { background: var(--primary-hover); }
+
+  /* ---- Hero ---- */
+  .hero {
+    padding: 160px 0 100px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 700px;
+    height: 500px;
+    background: radial-gradient(ellipse, var(--primary-glow) 0%, transparent 65%);
+    pointer-events: none;
+  }
+  .hero h1 {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: clamp(3rem, 8vw, 5rem);
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    margin-bottom: 16px;
+    position: relative;
+  }
+  .hero h1 span { color: var(--primary); }
+  .hero .subtitle {
+    font-size: 1.2rem;
+    color: var(--n400);
+    max-width: 480px;
+    margin: 0 auto 32px;
+    line-height: 1.6;
+    position: relative;
+  }
+  .hero-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+    position: relative;
+  }
+
+  /* ---- Buttons ---- */
+  .btn {
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 10px 24px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s var(--ease-out);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn:hover { text-decoration: none; }
+  .btn-primary {
+    background: var(--primary);
+    color: var(--n950);
+  }
+  .btn-primary:hover {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+  }
+  .btn-secondary {
+    background: transparent;
+    color: var(--n50);
+    border: 1px solid var(--n700);
+  }
+  .btn-secondary:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+  }
+
+  /* ---- Install Block ---- */
+  .install-block {
+    margin-top: 32px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--n900);
+    border: 1px solid var(--n800);
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-family: var(--font-code);
+    font-size: 0.85rem;
+    color: var(--n400);
+    position: relative;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .install-block:hover { border-color: var(--n600); }
+  .install-block .prompt { color: var(--primary); user-select: none; }
+  .install-block .cmd { color: var(--n50); user-select: all; }
+  .install-block .copied {
+    position: absolute;
+    right: -70px;
+    font-family: var(--font-body);
+    font-size: 0.75rem;
+    color: var(--success);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .install-block .copied.show { opacity: 1; }
+
+  /* ---- Terminal Demo ---- */
+  .terminal-section {
+    padding: 80px 0;
+  }
+  .terminal {
+    background: var(--n950);
+    border: 1px solid var(--n700);
+    border-radius: 12px;
+    overflow: hidden;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  .terminal-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: var(--n900);
+    border-bottom: 1px solid var(--n800);
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot.r { background: var(--error); }
+  .dot.y { background: var(--primary); }
+  .dot.g { background: var(--success); }
+  .terminal-title {
+    flex: 1;
+    text-align: center;
+    font-family: var(--font-code);
+    font-size: 0.7rem;
+    color: var(--n600);
+  }
+  .terminal-body {
+    padding: 20px;
+    font-family: var(--font-code);
+    font-size: 0.82rem;
+    line-height: 1.8;
+    color: var(--n400);
+  }
+  .terminal-body .p { color: var(--primary); user-select: none; }
+  .terminal-body .c { color: var(--n50); }
+  .terminal-body .dim { color: var(--n600); }
+  .terminal-body .teal { color: var(--secondary); }
+  .terminal-body .green { color: var(--success); }
+  .terminal-body .amber { color: var(--primary); }
+
+  /* ---- Section ---- */
+  section { padding: 80px 0; }
+
+  .section-label {
+    font-family: var(--font-code);
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--primary);
+    margin-bottom: 8px;
+  }
+  .section-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 2rem;
+    letter-spacing: -0.02em;
+    margin-bottom: 12px;
+  }
+  .section-subtitle {
+    color: var(--n400);
+    font-size: 1.05rem;
+    max-width: 560px;
+    margin-bottom: 40px;
+  }
+
+  /* ---- Features ---- */
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+  .feature {
+    padding: 32px;
+    background: var(--n900);
+    border: 1px solid var(--n800);
+    border-radius: 12px;
+    transition: border-color 0.2s var(--ease-out);
+  }
+  .feature:hover { border-color: var(--primary); }
+  .feature-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    margin-bottom: 16px;
+  }
+  .feature h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.05rem;
+    margin-bottom: 8px;
+  }
+  .feature p {
+    font-size: 0.875rem;
+    color: var(--n400);
+    line-height: 1.6;
+  }
+
+  /* ---- How It Works ---- */
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+    counter-reset: step;
+  }
+  .step {
+    position: relative;
+    padding-top: 48px;
+  }
+  .step::before {
+    counter-increment: step;
+    content: counter(step);
+    position: absolute;
+    top: 0;
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 1.5rem;
+    color: var(--primary);
+    opacity: 0.4;
+  }
+  .step h3 {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 8px;
+  }
+  .step p {
+    font-size: 0.875rem;
+    color: var(--n400);
+    line-height: 1.6;
+  }
+  .step code {
+    font-family: var(--font-code);
+    font-size: 0.8rem;
+    background: var(--n900);
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: var(--n300);
+  }
+
+  /* ---- Compatibility ---- */
+  .compat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .compat-item {
+    padding: 20px 24px;
+    background: var(--n900);
+    border: 1px solid var(--n800);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .compat-check {
+    color: var(--success);
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+  .compat-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+  }
+  .compat-note {
+    font-size: 0.75rem;
+    color: var(--n500);
+  }
+
+  /* ---- Code Block ---- */
+  .code-block {
+    background: var(--n900);
+    border: 1px solid var(--n800);
+    border-radius: 8px;
+    padding: 20px 24px;
+    font-family: var(--font-code);
+    font-size: 0.82rem;
+    line-height: 1.8;
+    color: var(--n300);
+    overflow-x: auto;
+    margin-top: 24px;
+    max-width: 600px;
+  }
+  .code-block .kw { color: var(--secondary); }
+  .code-block .str { color: var(--primary); }
+  .code-block .cmt { color: var(--n600); }
+
+  /* ---- CTA ---- */
+  .cta-section {
+    text-align: center;
+    padding: 100px 0;
+    position: relative;
+  }
+  .cta-section::before {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    height: 400px;
+    background: radial-gradient(ellipse, var(--primary-dim) 0%, transparent 65%);
+    pointer-events: none;
+  }
+  .cta-section h2 {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 2.5rem;
+    letter-spacing: -0.03em;
+    margin-bottom: 16px;
+    position: relative;
+  }
+  .cta-section p {
+    color: var(--n400);
+    margin-bottom: 32px;
+    font-size: 1.05rem;
+    position: relative;
+  }
+
+  /* ---- Footer ---- */
+  footer {
+    padding: 32px 0;
+    border-top: 1px solid var(--n800);
+  }
+  footer .container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  footer p {
+    font-size: 0.8rem;
+    color: var(--n600);
+  }
+  .footer-links {
+    display: flex;
+    gap: 20px;
+    list-style: none;
+  }
+  .footer-links a {
+    font-size: 0.8rem;
+    color: var(--n500);
+  }
+  .footer-links a:hover { color: var(--n50); }
+
+  /* ---- Responsive ---- */
+  @media (max-width: 768px) {
+    .hero { padding: 120px 0 60px; }
+    .features-grid, .steps, .compat-grid { grid-template-columns: 1fr; }
+    nav .nav-links .hide-mobile { display: none; }
+    footer .container { flex-direction: column; gap: 12px; }
+  }
+
+  /* ---- Animations ---- */
+  @media (prefers-reduced-motion: no-preference) {
+    .fade-in {
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 0.5s var(--ease-out), transform 0.5s var(--ease-out);
+    }
+    .fade-in.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fade-in { opacity: 1; transform: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <div class="container">
+    <a href="#" class="nav-logo"><span>gif</span>term</a>
+    <ul class="nav-links">
+      <li><a href="#features" class="hide-mobile">Features</a></li>
+      <li><a href="#how-it-works" class="hide-mobile">How it works</a></li>
+      <li><a href="#install">Install</a></li>
+      <li><a href="https://github.com/nalediym/gifterm" class="nav-cta">GitHub</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- Hero -->
+<header class="hero">
+  <div class="container">
+    <h1 class="fade-in">Your terminal,<br><span>now with vibes.</span></h1>
+    <p class="subtitle fade-in">Play animated GIFs natively in kitty-protocol terminals. Fire-and-forget animations that persist on the GPU.</p>
+    <div class="hero-actions fade-in">
+      <a class="btn btn-primary" href="#install">Install</a>
+      <a class="btn btn-secondary" href="https://github.com/nalediym/gifterm">View source</a>
+    </div>
+    <div class="install-block fade-in" onclick="copyInstall(this)">
+      <span class="prompt">$</span>
+      <span class="cmd">cargo install gifterm</span>
+      <span class="copied" id="copied-msg">Copied!</span>
+    </div>
+  </div>
+</header>
+
+<!-- Terminal Demo -->
+<div class="terminal-section">
+  <div class="container">
+    <div class="terminal fade-in">
+      <div class="terminal-bar">
+        <div class="dot r"></div>
+        <div class="dot y"></div>
+        <div class="dot g"></div>
+        <div class="terminal-title">Terminal</div>
+      </div>
+      <div class="terminal-body">
+        <span class="p">$</span> <span class="c">gifterm lofi-rain.gif --width 400</span><br>
+        <span class="dim">gifterm</span> <span class="teal">decoding</span> lofi-rain.gif<br>
+        <span class="dim">gifterm</span> <span class="teal">scaling </span> 640x480 -&gt; 400x300 (lanczos3)<br>
+        <span class="dim">gifterm</span> <span class="teal">decoded </span> 47/47 frames<br>
+        <span class="dim">gifterm</span> <span class="green">cached </span> 47 frames (1840 KB) -&gt; ~/.cache/gifterm/a1b2c3d4<br>
+        <span class="dim">gifterm</span> <span class="teal">sending </span> 47/47 frames<br>
+        <span class="dim">gifterm</span> <span class="green">playing</span> 47 frames, loop=infinite, id=1001<br>
+        <br>
+        <span class="p">$</span> <span class="c">gifterm pixel-cat.gif</span><br>
+        <span class="dim">gifterm</span> <span class="amber">cache hit</span> 12 frames, 120x120<br>
+        <span class="dim">gifterm</span> <span class="green">playing</span> 12 frames, loop=infinite, id=1002<br>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Features -->
+<section id="features">
+  <div class="container">
+    <p class="section-label fade-in">Features</p>
+    <h2 class="section-title fade-in">Built for terminal natives.</h2>
+    <p class="section-subtitle fade-in">One command. The GIF plays. gifterm exits. The animation lives on.</p>
+
+    <div class="features-grid">
+      <div class="feature fade-in">
+        <div class="feature-icon" style="background: var(--primary-dim); color: var(--primary);">&#9618;</div>
+        <h3>GPU-native</h3>
+        <p>Animations persist in kitty's GPU memory after gifterm exits. Like an <code>&lt;img&gt;</code> tag for your terminal. Clear the screen to dismiss.</p>
+      </div>
+      <div class="feature fade-in">
+        <div class="feature-icon" style="background: var(--secondary-dim, #5BB8B01A); color: var(--secondary);">&#8644;</div>
+        <h3>Content-addressed cache</h3>
+        <p>Frames are decoded once, cached by SHA-256 hash. Second play loads instantly from disk, no decode step. Width variants get their own cache key.</p>
+      </div>
+      <div class="feature fade-in">
+        <div class="feature-icon" style="background: #7EC88B1A; color: var(--success);">&#9656;</div>
+        <h3>Fire and forget</h3>
+        <p>gifterm exits immediately after transmitting frames. The animation loops on the GPU independently. Multiple GIFs can run simultaneously.</p>
+      </div>
+      <div class="feature fade-in">
+        <div class="feature-icon" style="background: var(--primary-dim); color: var(--primary);">&#8674;</div>
+        <h3>Smart scaling</h3>
+        <p>Pass <code>--width 400</code> and gifterm scales with Lanczos3 filtering. Original aspect ratio preserved. Scaled frames are cached separately.</p>
+      </div>
+      <div class="feature fade-in">
+        <div class="feature-icon" style="background: #5BB8B01A; color: var(--secondary);">&#9881;</div>
+        <h3>Zero runtime deps</h3>
+        <p>Single static Rust binary. No Python, no Node, no runtime dependencies. Compiles to one file you can drop anywhere.</p>
+      </div>
+      <div class="feature fade-in">
+        <div class="feature-icon" style="background: #7EC88B1A; color: var(--success);">&#9733;</div>
+        <h3>Library + CLI</h3>
+        <p>Use as a CLI tool or import as a Rust crate. The library compiles without the CLI feature, no clap dependency. Works with any kitty-protocol integration.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- How It Works -->
+<section id="how-it-works" style="border-top: 1px solid var(--n800);">
+  <div class="container">
+    <p class="section-label fade-in">How it works</p>
+    <h2 class="section-title fade-in">Three steps, then gifterm gets out of the way.</h2>
+
+    <div class="steps">
+      <div class="step fade-in">
+        <h3>Decode</h3>
+        <p>GIF frames are decoded into raw RGBA buffers using the <code>image</code> crate. Optionally scaled down with Lanczos3 filtering for crisp results at any width.</p>
+      </div>
+      <div class="step fade-in">
+        <h3>Cache</h3>
+        <p>Decoded frames are written to a content-addressed cache at <code>~/.cache/gifterm/</code>, keyed by SHA-256 of the source file. Next time, decode is skipped entirely.</p>
+      </div>
+      <div class="step fade-in">
+        <h3>Transmit</h3>
+        <p>Frames are sent to the terminal via the kitty graphics protocol using temp-file transfer. The terminal assembles them into a looping animation on the GPU.</p>
+      </div>
+    </div>
+
+    <div class="code-block fade-in">
+      <span class="cmt">// Library usage</span><br>
+      <span class="kw">use</span> std::path::Path;<br>
+      <br>
+      <span class="kw">let</span> path = Path::new(<span class="str">"animation.gif"</span>);<br>
+      <span class="kw">let</span> (meta, frames) = gifterm::load_frames(path, Some(<span class="str">400</span>))?;<br>
+      gifterm::play(&amp;meta, &amp;frames)?;
+    </div>
+  </div>
+</section>
+
+<!-- Compatibility -->
+<section id="install" style="border-top: 1px solid var(--n800);">
+  <div class="container">
+    <p class="section-label fade-in">Install</p>
+    <h2 class="section-title fade-in">One command.</h2>
+    <p class="section-subtitle fade-in">gifterm works with any terminal that supports the kitty graphics protocol.</p>
+
+    <div class="code-block fade-in" style="max-width: 400px; margin-bottom: 40px; font-size: 0.9rem;">
+      <span style="color: var(--primary);">$</span> cargo install gifterm
+    </div>
+
+    <p class="section-label fade-in" style="margin-top: 48px;">Compatible terminals</p>
+    <div class="compat-grid fade-in">
+      <div class="compat-item">
+        <span class="compat-check">&#10003;</span>
+        <div>
+          <div class="compat-name">kitty</div>
+          <div class="compat-note">Full support</div>
+        </div>
+      </div>
+      <div class="compat-item">
+        <span class="compat-check">&#10003;</span>
+        <div>
+          <div class="compat-name">WezTerm</div>
+          <div class="compat-note">Full support</div>
+        </div>
+      </div>
+      <div class="compat-item">
+        <span class="compat-check" style="color: var(--primary);">&#9679;</span>
+        <div>
+          <div class="compat-name">Konsole</div>
+          <div class="compat-note">Partial support</div>
+        </div>
+      </div>
+    </div>
+
+    <p style="margin-top: 24px; font-size: 0.85rem; color: var(--n500);" class="fade-in">
+      tmux blocks the graphics protocol by default. Set <code style="font-family: var(--font-code); background: var(--n900); padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">allow-passthrough on</code> in your tmux.conf, or run gifterm in a raw terminal window.
+    </p>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section" style="border-top: 1px solid var(--n800);">
+  <div class="container">
+    <h2 class="fade-in">Terminals deserve<br>to feel <span style="color: var(--primary);">alive</span>.</h2>
+    <p class="fade-in">Lofi vibes. Pixel art. Ambient animation. No browser tab required.</p>
+    <div class="hero-actions fade-in" style="position: relative;">
+      <a class="btn btn-primary" href="https://crates.io/crates/gifterm">crates.io</a>
+      <a class="btn btn-secondary" href="https://github.com/nalediym/gifterm">GitHub</a>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer>
+  <div class="container">
+    <p>gifterm v0.1.1 &middot; MIT License</p>
+    <ul class="footer-links">
+      <li><a href="https://github.com/nalediym/gifterm">Source</a></li>
+      <li><a href="https://crates.io/crates/gifterm">crates.io</a></li>
+      <li><a href="https://docs.rs/gifterm">Docs</a></li>
+    </ul>
+  </div>
+</footer>
+
+<script>
+// Copy install command
+function copyInstall(el) {
+  navigator.clipboard.writeText('cargo install gifterm').then(() => {
+    const msg = el.querySelector('.copied');
+    msg.classList.add('show');
+    setTimeout(() => msg.classList.remove('show'), 1500);
+  });
+}
+
+// Fade-in on scroll
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+document.querySelectorAll('.fade-in').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>
